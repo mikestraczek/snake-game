@@ -1,0 +1,178 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply box-border;
+  }
+  
+  body {
+    @apply font-sans bg-gradient-primary min-h-screen text-white;
+    margin: 0;
+    padding: 0;
+  }
+  
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  /* Glasmorphismus Button */
+  .btn-glass {
+    @apply bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-6 py-3 font-semibold text-white transition-all duration-300 hover:bg-white/30 hover:scale-105 active:scale-95 shadow-glass-sm;
+  }
+  
+  .btn-glass:disabled {
+    @apply opacity-50 cursor-not-allowed hover:scale-100 hover:bg-white/20;
+  }
+  
+  /* Glasmorphismus Card */
+  .card-glass {
+    @apply bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-glass;
+  }
+  
+  /* Input Glasmorphismus */
+  .input-glass {
+    @apply bg-white/20 backdrop-blur-md border border-white/30 rounded-xl px-4 py-3 text-white placeholder-white/70 focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/50 transition-all duration-300;
+  }
+  
+  .input-glass::placeholder {
+    @apply text-white/70;
+  }
+  
+  /* Spieler-Farben */
+  .player-1 {
+    @apply text-player-1;
+  }
+  
+  .player-2 {
+    @apply text-player-2;
+  }
+  
+  .player-3 {
+    @apply text-player-3;
+  }
+  
+  .player-4 {
+    @apply text-player-4;
+  }
+  
+  .bg-player-1 {
+    @apply bg-player-1;
+  }
+  
+  .bg-player-2 {
+    @apply bg-player-2;
+  }
+  
+  .bg-player-3 {
+    @apply bg-player-3;
+  }
+  
+  .bg-player-4 {
+    @apply bg-player-4;
+  }
+  
+  /* Chat Bubble */
+  .chat-bubble {
+    @apply bg-white/20 backdrop-blur-sm rounded-lg px-3 py-2 mb-2 border border-white/10;
+  }
+  
+  .chat-bubble.system {
+    @apply bg-yellow-500/20 border-yellow-500/30 text-yellow-100;
+  }
+  
+  /* Scoreboard */
+  .scoreboard {
+    @apply bg-black/30 backdrop-blur-md rounded-xl p-4 border border-white/20;
+  }
+  
+  /* Mobile Controls */
+  .control-btn {
+    @apply bg-white/20 backdrop-blur-md border border-white/30 rounded-xl w-12 h-12 flex items-center justify-center text-xl font-bold text-white transition-all duration-200 hover:bg-white/30 active:scale-95 touch-manipulation;
+  }
+  
+  /* Loading Spinner */
+  .spinner {
+    @apply animate-spin rounded-full border-2 border-white/30 border-t-white;
+  }
+  
+  /* Neon Glow Effect */
+  .neon-glow {
+    @apply shadow-neon;
+  }
+  
+  /* Pulse Animation für Score */
+  .score-pulse {
+    @apply animate-pulse-slow;
+  }
+}
+
+@layer utilities {
+  /* Scrollbar Styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.3);
+    border-radius: 3px;
+  }
+  
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.5);
+  }
+  
+  /* Touch-optimized */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+  
+  /* Prevent text selection */
+  .no-select {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+  
+  /* Canvas styling */
+  .game-canvas {
+    @apply bg-white/90 rounded-xl shadow-glass-sm border-2 border-white/30;
+  }
+}
+
+/* Custom animations */
+@keyframes confetti {
+  0% {
+    transform: translateY(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-100vh) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+.confetti {
+  animation: confetti 3s ease-out forwards;
+}
+
+/* Responsive breakpoints reminder:
+   sm: 640px
+   md: 768px
+   lg: 1024px
+   xl: 1280px
+   2xl: 1536px
+*/
