@@ -124,6 +124,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     newSocket.on('game-ended', (data: GameEndedEvent) => {
       console.log('🏁 Spiel beendet:', data)
       setGameResults(data.results)
+      
+      // GameState auf 'finished' setzen für Navigation zur Results-Page
+      const currentState = useGameStore.getState()
+      if (currentState.gameState) {
+        setGameState({
+          ...currentState.gameState,
+          gameStatus: 'finished'
+        })
+      }
+      
       toast.info('Spiel beendet!')
     })
 
@@ -199,6 +209,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.emit('start-game')
   }
 
+  const restartGame = () => {
+    if (!socket) {
+      toast.error('Keine Verbindung zum Server')
+      return
+    }
+    
+    console.log('🔄 Starte Spiel neu')
+    const data: RestartGameEvent = {}
+    socket.emit('restart-game', data)
+  }
+
   const sendGameInput = (direction: PlayerInputEvent['direction']) => {
     if (!socket) return
     
@@ -241,6 +262,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     joinRoom,
     setPlayerReady,
     startGame,
+    restartGame,
     sendGameInput,
     sendChatMessage,
     disconnect

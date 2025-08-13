@@ -8,7 +8,7 @@ import { useAudio } from '../hooks/use-audio'
 function ResultsPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
-  const { disconnect } = useSocket()
+  const { disconnect, restartGame } = useSocket()
   const { playSound } = useAudio()
   
   const roomInfo = useGameSelectors.roomInfo()
@@ -67,7 +67,9 @@ function ResultsPage() {
   }
   
   const handleRestartGame = () => {
-    // Zurück zur Lobby für neues Spiel
+    // Spiel auf Server neu starten
+    restartGame()
+    // Zur Lobby navigieren
     navigate(`/lobby/${roomId}`)
   }
   
@@ -113,8 +115,7 @@ function ResultsPage() {
   }
   
   const currentPlayerResult = gameResults.find(result => {
-    const player = players.find(p => p.name === result.playerName)
-    return player?.id === roomInfo.playerId
+    return result.playerId === roomInfo.playerId
   })
   
   if (!gameResults.length) {
@@ -173,7 +174,7 @@ function ResultsPage() {
         <div className="mb-8 animate-slide-up">
           <div className="flex justify-center items-end gap-4 mb-8">
             {gameResults.slice(0, 3).map((result, index) => {
-              const player = players.find(p => p.name === result.playerName)
+              const player = players.find(p => p.id === result.playerId || p.name === result.playerName)
               const heights = ['h-32', 'h-40', 'h-28'] // 2nd, 1st, 3rd
               const orders = [1, 0, 2] // Reihenfolge für Podium-Darstellung
               const actualIndex = orders.indexOf(index)
@@ -221,7 +222,7 @@ function ResultsPage() {
           
           <div className="space-y-3">
             {gameResults.map((result) => {
-              const player = players.find(p => p.name === result.playerName)
+              const player = players.find(p => p.id === result.playerId || p.name === result.playerName)
               const isCurrentPlayer = player?.id === roomInfo.playerId
               
               return (
