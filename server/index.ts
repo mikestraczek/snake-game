@@ -6,15 +6,10 @@ import helmet from 'helmet'
 import compression from 'compression'
 import { RoomManager } from './services/room-manager.js'
 import { GameEngine } from './services/game-engine.js'
+import { GameEngine3D } from './services/game-engine-3d.js'
 import { PlayerManager } from './services/player-manager.js'
 import { setupSocketHandlers } from './socket-handlers.js'
-import type {
-  JoinRoomEvent,
-  CreateRoomEvent,
-  PlayerInputEvent,
-  PlayerReadyEvent,
-  ChatMessageEvent
-} from '../shared/types.js'
+// Removed unused type imports
 
 const app = express()
 const server = createServer(app)
@@ -54,14 +49,15 @@ app.use(express.static('dist/client'))
 // Services
 const roomManager = new RoomManager()
 const gameEngine = new GameEngine()
+const gameEngine3D = new GameEngine3D()
 const playerManager = new PlayerManager()
 
 // REST API Routes
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: Date.now() })
 })
 
-app.get('/api/rooms/active', async (req, res) => {
+app.get('/api/rooms/active', async (_req, res) => {
   try {
     const activeRooms = await roomManager.getActiveRooms()
     res.json({
@@ -91,7 +87,7 @@ app.get('/api/room/:roomId/info', async (req, res) => {
 })
 
 // Fallback für SPA
-app.get('*', (req, res) => {
+app.get('*', (_req, res) => {
   res.sendFile('index.html', { root: 'dist/client' })
 })
 
@@ -99,6 +95,7 @@ app.get('*', (req, res) => {
 setupSocketHandlers(io, {
   roomManager,
   gameEngine,
+  gameEngine3D,
   playerManager
 })
 

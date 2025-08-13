@@ -1,10 +1,9 @@
 import type {
   PlayerData,
   Player,
-  SessionData,
-  PlayerColor,
-  PLAYER_COLORS
+  SessionData
 } from '../../shared/types.js'
+import { PLAYER_COLORS } from '../../shared/types.js'
 
 export class PlayerManager {
   private players = new Map<string, PlayerData>()

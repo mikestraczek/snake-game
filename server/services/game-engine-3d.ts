@@ -1,15 +1,15 @@
 import type {
-  GameState,
-  PlayerGameState,
-  Position,
-  Direction,
+  GameState3D,
+  PlayerGameState3D,
+  Position3D,
+  Direction3D,
   GameSettings,
   GameResult
 } from '../../shared/types.js'
-import { BOARD_SIZES } from '../../shared/types.js'
+import { BOARD_SIZES_3D } from '../../shared/types.js'
 
-export class GameEngine {
-  private gameStates = new Map<string, GameState>()
+export class GameEngine3D {
+  private gameStates = new Map<string, GameState3D>()
   private gameTimers = new Map<string, NodeJS.Timeout>()
   private gameStartTimes = new Map<string, number>()
 
@@ -18,15 +18,15 @@ export class GameEngine {
     roomId: string,
     players: { id: string; name: string }[],
     gameSettings: GameSettings
-  ): Promise<GameState> {
+  ): Promise<GameState3D> {
     // Bestehende Timer stoppen
     this.stopGame(roomId)
     
-    const boardSize = BOARD_SIZES[gameSettings.boardSize]
+    const boardSize = BOARD_SIZES_3D[gameSettings.boardSize]
     const tileCount = boardSize.width / boardSize.gridSize
     
     // Spieler-Startpositionen generieren
-    const playerGameStates: PlayerGameState[] = players.map((player, index) => {
+    const playerGameStates: PlayerGameState3D[] = players.map((player, index) => {
       const startPosition = this.getPlayerStartPosition(index, tileCount)
       
       return {
@@ -39,9 +39,9 @@ export class GameEngine {
     })
     
     // Initiales Futter generieren
-    const food = this.generateFood(playerGameStates, tileCount, 3)
+    const food = this.generateFood(playerGameStates, tileCount, 5)
     
-    const gameState: GameState = {
+    const gameState: GameState3D = {
       players: playerGameStates,
       food,
       gameStatus: 'playing'
@@ -53,7 +53,7 @@ export class GameEngine {
     // Game Loop starten
     this.startGameLoop(roomId, gameSettings)
     
-    console.log(`🎮 Spiel gestartet für Raum ${roomId} mit ${players.length} Spielern`)
+    console.log(`🎮 3D-Spiel gestartet für Raum ${roomId} mit ${players.length} Spielern`)
     
     return gameState
   }
@@ -71,14 +71,14 @@ export class GameEngine {
       gameState.gameStatus = 'finished'
     }
     
-    console.log(`⏹️ Spiel gestoppt für Raum ${roomId}`)
+    console.log(`⏹️ 3D-Spiel gestoppt für Raum ${roomId}`)
   }
 
   // Spieler-Input verarbeiten
   async processPlayerInput(
     roomId: string,
     playerId: string,
-    direction: Direction
+    direction: Direction3D
   ): Promise<boolean> {
     const gameState = this.gameStates.get(roomId)
     if (!gameState || gameState.gameStatus !== 'playing') {
@@ -91,11 +91,13 @@ export class GameEngine {
     }
     
     // Verhindere Rückwärtsbewegung
-    const oppositeDirections: Record<Direction, Direction> = {
+    const oppositeDirections: Record<Direction3D, Direction3D> = {
       up: 'down',
       down: 'up',
       left: 'right',
-      right: 'left'
+      right: 'left',
+      forward: 'backward',
+      backward: 'forward'
     }
     
     if (player.direction === oppositeDirections[direction]) {
@@ -107,7 +109,7 @@ export class GameEngine {
   }
 
   // Aktuellen Spielzustand abrufen
-  getGameState(roomId: string): GameState | null {
+  getGameState(roomId: string): GameState3D | null {
     return this.gameStates.get(roomId) || null
   }
 
@@ -136,7 +138,7 @@ export class GameEngine {
 
   // Private Methoden
   private startGameLoop(roomId: string, gameSettings: GameSettings): void {
-    const tickRate = Math.max(100, 300 - (gameSettings.gameSpeed * 40)) // 100-260ms
+    const tickRate = Math.max(150, 400 - (gameSettings.gameSpeed * 50)) // Etwas langsamer für 3D
     
     const timer = setInterval(() => {
       this.updateGame(roomId, gameSettings)
@@ -151,7 +153,7 @@ export class GameEngine {
       return
     }
     
-    const boardSize = BOARD_SIZES[gameSettings.boardSize]
+    const boardSize = BOARD_SIZES_3D[gameSettings.boardSize]
     const tileCount = boardSize.width / boardSize.gridSize
     
     // Alle lebenden Spieler bewegen
@@ -165,7 +167,7 @@ export class GameEngine {
       // Kollisionsprüfung
       if (this.checkCollision(newHead, gameState.players, tileCount)) {
         player.alive = false
-        console.log(`💀 Spieler ${player.id} eliminiert`)
+        console.log(`💀 3D-Spieler ${player.id} eliminiert`)
         continue
       }
       
@@ -174,7 +176,7 @@ export class GameEngine {
       
       // Futter-Kollision prüfen
       const foodIndex = gameState.food.findIndex(
-        food => food.x === newHead.x && food.y === newHead.y
+        food => food.x === newHead.x && food.y === newHead.y && food.z === newHead.z
       )
       
       if (foodIndex !== -1) {
@@ -196,45 +198,55 @@ export class GameEngine {
     if (alivePlayers.length <= 1) {
       gameState.gameStatus = 'finished'
       this.stopGame(roomId)
-      
-      console.log(`🏁 Spiel beendet für Raum ${roomId}`)
+      console.log(`🏁 3D-Spiel beendet für Raum ${roomId}`)
     }
   }
 
-  private getNextPosition(position: Position, direction: Direction): Position {
+  private getNextPosition(position: Position3D, direction: Direction3D): Position3D {
+    const { x, y, z } = position
+    
     switch (direction) {
       case 'up':
-        return { x: position.x, y: position.y - 1 }
+        return { x, y: y - 1, z }
       case 'down':
-        return { x: position.x, y: position.y + 1 }
+        return { x, y: y + 1, z }
       case 'left':
-        return { x: position.x - 1, y: position.y }
+        return { x: x - 1, y, z }
       case 'right':
-        return { x: position.x + 1, y: position.y }
+        return { x: x + 1, y, z }
+      case 'forward':
+        return { x, y, z: z + 1 }
+      case 'backward':
+        return { x, y, z: z - 1 }
+      default:
+        return position
     }
   }
 
   private checkCollision(
-    position: Position,
-    players: PlayerGameState[],
+    position: Position3D,
+    players: PlayerGameState3D[],
     tileCount: number
   ): boolean {
     // Wand-Kollision
     if (
-      position.x < 0 ||
-      position.x >= tileCount ||
-      position.y < 0 ||
-      position.y >= tileCount
+      position.x < 0 || position.x >= tileCount ||
+      position.y < 0 || position.y >= tileCount ||
+      position.z < 0 || position.z >= tileCount
     ) {
       return true
     }
     
-    // Schlangen-Kollision (alle Spieler)
+    // Schlangen-Kollision
     for (const player of players) {
       if (!player.alive) continue
       
       for (const segment of player.snake) {
-        if (segment.x === position.x && segment.y === position.y) {
+        if (
+          segment.x === position.x &&
+          segment.y === position.y &&
+          segment.z === position.z
+        ) {
           return true
         }
       }
@@ -244,59 +256,66 @@ export class GameEngine {
   }
 
   private generateFood(
-    players: PlayerGameState[],
+    players: PlayerGameState3D[],
     tileCount: number,
     count: number
-  ): Position[] {
-    const food: Position[] = []
+  ): Position3D[] {
+    const food: Position3D[] = []
     const occupiedPositions = new Set<string>()
     
     // Alle besetzten Positionen sammeln
     for (const player of players) {
       for (const segment of player.snake) {
-        occupiedPositions.add(`${segment.x},${segment.y}`)
+        occupiedPositions.add(`${segment.x},${segment.y},${segment.z}`)
       }
     }
     
     // Futter generieren
     for (let i = 0; i < count; i++) {
       let attempts = 0
-      let position: Position
+      let position: Position3D
       
       do {
         position = {
           x: Math.floor(Math.random() * tileCount),
-          y: Math.floor(Math.random() * tileCount)
+          y: Math.floor(Math.random() * tileCount),
+          z: Math.floor(Math.random() * tileCount)
         }
         attempts++
       } while (
-        occupiedPositions.has(`${position.x},${position.y}`) &&
+        occupiedPositions.has(`${position.x},${position.y},${position.z}`) &&
         attempts < 100
       )
       
       if (attempts < 100) {
         food.push(position)
-        occupiedPositions.add(`${position.x},${position.y}`)
+        occupiedPositions.add(`${position.x},${position.y},${position.z}`)
       }
     }
     
     return food
   }
 
-  private getPlayerStartPosition(playerIndex: number, tileCount: number): Position {
+  private getPlayerStartPosition(playerIndex: number, tileCount: number): Position3D {
     const margin = 3
+    const center = Math.floor(tileCount / 2)
+    
     const positions = [
-      { x: margin, y: margin }, // Oben links
-      { x: tileCount - margin, y: tileCount - margin }, // Unten rechts
-      { x: tileCount - margin, y: margin }, // Oben rechts
-      { x: margin, y: tileCount - margin } // Unten links
+      { x: margin, y: margin, z: center }, // Vorne links
+      { x: tileCount - margin, y: tileCount - margin, z: center }, // Hinten rechts
+      { x: tileCount - margin, y: margin, z: center }, // Vorne rechts
+      { x: margin, y: tileCount - margin, z: center }, // Hinten links
+      { x: center, y: margin, z: margin }, // Oben vorne
+      { x: center, y: tileCount - margin, z: tileCount - margin }, // Unten hinten
+      { x: center, y: margin, z: tileCount - margin }, // Oben hinten
+      { x: center, y: tileCount - margin, z: margin } // Unten vorne
     ]
     
     return positions[playerIndex % positions.length]
   }
 
-  private getPlayerStartDirection(playerIndex: number): Direction {
-    const directions: Direction[] = ['right', 'left', 'left', 'right']
+  private getPlayerStartDirection(playerIndex: number): Direction3D {
+    const directions: Direction3D[] = ['right', 'left', 'left', 'right', 'down', 'up', 'forward', 'backward']
     return directions[playerIndex % directions.length]
   }
 

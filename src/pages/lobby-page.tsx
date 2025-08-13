@@ -14,13 +14,13 @@ import {
   MessageCircle
 } from 'lucide-react'
 import { useSocket } from '../hooks/use-socket'
-import { useGame, useGameSelectors } from '../stores/game-store'
+import { useGameSelectors } from '../stores/game-store'
 import type { Player } from '../../shared/types'
 
 function LobbyPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
-  const { setPlayerReady, startGame, sendChatMessage, disconnect } = useSocket()
+  const { setPlayerReady, startGame, sendChatMessage, disconnect, updateGameSettings } = useSocket()
   
   const roomInfo = useGameSelectors.roomInfo()
   const players = useGameSelectors.players()
@@ -29,7 +29,7 @@ function LobbyPage() {
   
   const [isReady, setIsReady] = useState(false)
   const [chatInput, setChatInput] = useState('')
-  const [showChat, setShowChat] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   
   // Nur bei echten Fehlern zur Home navigieren (ohne Timer)
@@ -49,9 +49,10 @@ function LobbyPage() {
   // Navigation zum Spiel wenn gestartet
   useEffect(() => {
     if (gameState?.gameStatus === 'playing') {
-      navigate(`/game/${roomId}`)
+      const path = gameSettings?.is3D ? `/game3d/${roomId}` : `/game/${roomId}`
+      navigate(path)
     }
-  }, [gameState?.gameStatus, roomId, navigate])
+  }, [gameState?.gameStatus, roomId, navigate, gameSettings?.is3D])
   
   const handleReadyToggle = () => {
     const newReady = !isReady
@@ -103,6 +104,13 @@ function LobbyPage() {
   const handleLeaveRoom = () => {
     disconnect()
     navigate('/')
+  }
+
+  const handleSettingsChange = (newSettings: Partial<typeof gameSettings>) => {
+    if (!roomInfo.isHost || !gameSettings) return
+    
+    const updatedSettings = { ...gameSettings, ...newSettings }
+    updateGameSettings(updatedSettings)
   }
   
   // const currentPlayer = players.find(p => p.id === roomInfo.playerId)
@@ -166,34 +174,124 @@ function LobbyPage() {
           
           {/* Spiel-Einstellungen */}
           {gameSettings && (
-            <div className="bg-white/10 rounded-lg p-3">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-white/70">Spieler:</span>
-                  <span className="ml-2 text-white">
-                    {players.length}/{gameSettings.maxPlayers}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-white/70">Geschwindigkeit:</span>
-                  <span className="ml-2 text-white">
-                    {['Langsam', 'Gemäßigt', 'Normal', 'Schnell', 'Sehr schnell'][gameSettings.gameSpeed - 1]}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-white/70">Spielfeld:</span>
-                  <span className="ml-2 text-white capitalize">
-                    {gameSettings.boardSize === 'small' ? 'Klein' : 
-                     gameSettings.boardSize === 'medium' ? 'Mittel' : 'Groß'}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-white/70">Modus:</span>
-                  <span className="ml-2 text-white">
-                    {gameSettings.gameMode === 'classic' ? 'Klassisch' : 'Battle Royale'}
-                  </span>
-                </div>
+            <div className="bg-white/10 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-white font-semibold flex items-center gap-2">
+                  <Settings className="w-4 h-4" />
+                  Spiel-Einstellungen
+                </h3>
+                {roomInfo.isHost && (
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="text-xs text-white/70 hover:text-white transition-colors"
+                  >
+                    {showSettings ? 'Weniger' : 'Bearbeiten'}
+                  </button>
+                )}
               </div>
+              
+              {roomInfo.isHost && showSettings ? (
+                /* Editierbare Einstellungen für Host */
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-white/70 mb-1">Max. Spieler</label>
+                      <select
+                        value={gameSettings.maxPlayers}
+                        onChange={(e) => handleSettingsChange({ maxPlayers: Number(e.target.value) as 2 | 3 | 4 })}
+                        className="w-full bg-white/20 border border-white/30 rounded px-3 py-2 text-white text-sm"
+                      >
+                        <option value={2}>2 Spieler</option>
+                        <option value={3}>3 Spieler</option>
+                        <option value={4}>4 Spieler</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-white/70 mb-1">Geschwindigkeit</label>
+                      <select
+                        value={gameSettings.gameSpeed}
+                        onChange={(e) => handleSettingsChange({ gameSpeed: Number(e.target.value) as 1 | 2 | 3 | 4 | 5 })}
+                        className="w-full bg-white/20 border border-white/30 rounded px-3 py-2 text-white text-sm"
+                      >
+                        <option value={1}>Langsam</option>
+                        <option value={2}>Gemäßigt</option>
+                        <option value={3}>Normal</option>
+                        <option value={4}>Schnell</option>
+                        <option value={5}>Sehr schnell</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-white/70 mb-1">Spielfeld</label>
+                      <select
+                        value={gameSettings.boardSize}
+                        onChange={(e) => handleSettingsChange({ boardSize: e.target.value as 'small' | 'medium' | 'large' })}
+                        className="w-full bg-white/20 border border-white/30 rounded px-3 py-2 text-white text-sm"
+                      >
+                        <option value="small">Klein</option>
+                        <option value="medium">Mittel</option>
+                        <option value="large">Groß</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-white/70 mb-1">Spielmodus</label>
+                      <select
+                        value={gameSettings.gameMode}
+                        onChange={(e) => handleSettingsChange({ gameMode: e.target.value as 'classic' | 'battle-royale' })}
+                        className="w-full bg-white/20 border border-white/30 rounded px-3 py-2 text-white text-sm"
+                      >
+                        <option value="classic">Klassisch</option>
+                        <option value="battle-royale">Battle Royale</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {/* 2D/3D Toggle */}
+                  <div>
+                    <label className="flex items-center gap-2 text-sm text-white">
+                      <input
+                        type="checkbox"
+                        checked={gameSettings.is3D || false}
+                        onChange={(e) => handleSettingsChange({ is3D: e.target.checked })}
+                        className="w-4 h-4 rounded border-white/30 bg-white/20 text-blue-500 focus:ring-blue-500"
+                      />
+                      3D-Modus aktivieren
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                /* Nur-Lese Anzeige */
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div>
+                    <span className="text-white/70">Spieler:</span>
+                    <span className="ml-2 text-white">
+                      {players.length}/{gameSettings.maxPlayers}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/70">Geschwindigkeit:</span>
+                    <span className="ml-2 text-white">
+                      {['Langsam', 'Gemäßigt', 'Normal', 'Schnell', 'Sehr schnell'][gameSettings.gameSpeed - 1]}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/70">Spielfeld:</span>
+                    <span className="ml-2 text-white capitalize">
+                      {gameSettings.boardSize === 'small' ? 'Klein' : 
+                       gameSettings.boardSize === 'medium' ? 'Mittel' : 'Groß'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-white/70">Modus:</span>
+                    <span className="ml-2 text-white">
+                      {gameSettings.gameMode === 'classic' ? 'Klassisch' : 'Battle Royale'}
+                      {gameSettings.is3D && <span className="ml-1 text-blue-300">(3D)</span>}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

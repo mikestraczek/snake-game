@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io'
 import { randomBytes } from 'crypto'
 import type { RoomManager } from './services/room-manager.js'
 import type { GameEngine } from './services/game-engine.js'
+import type { GameEngine3D } from './services/game-engine-3d.js'
 import type { PlayerManager } from './services/player-manager.js'
 import type {
   JoinRoomEvent,
@@ -10,21 +11,24 @@ import type {
   PlayerReadyEvent,
   ChatMessageEvent,
   RestartGameEvent,
+  UpdateGameSettingsEvent,
   RoomJoinedEvent,
   PlayerListUpdateEvent,
   GameStateUpdateEvent,
   GameEndedEvent,
-  ChatMessageReceiveEvent
+  ChatMessageReceiveEvent,
+  GameSettingsUpdatedEvent
 } from '../shared/types.js'
 
 type Services = {
   roomManager: RoomManager
   gameEngine: GameEngine
+  gameEngine3D: GameEngine3D
   playerManager: PlayerManager
 }
 
 export function setupSocketHandlers(io: Server, services: Services) {
-  const { roomManager, gameEngine, playerManager } = services
+  const { roomManager, gameEngine, gameEngine3D, playerManager } = services
 
   io.on('connection', (socket: Socket) => {
     console.log(`🔌 Client verbunden: ${socket.id}`)
@@ -211,18 +215,28 @@ export function setupSocketHandlers(io: Server, services: Services) {
         // Raum-Status aktualisieren
         await roomManager.updateRoomStatus(player.roomId, 'playing')
         
-        // Spiel starten
-        const gameState = await gameEngine.startGame(
-          player.roomId,
-          playersInRoom.map(p => ({ id: p.id, name: p.name })),
-          room.gameSettings
-        )
+        // Spiel starten (2D oder 3D basierend auf Einstellungen)
+        const gameState = room.gameSettings.is3D
+          ? await gameEngine3D.startGame(
+              player.roomId,
+              playersInRoom.map(p => ({ id: p.id, name: p.name })),
+              room.gameSettings
+            )
+          : await gameEngine.startGame(
+              player.roomId,
+              playersInRoom.map(p => ({ id: p.id, name: p.name })),
+              room.gameSettings
+            )
         
         // Spiel-Start an alle Spieler senden
         io.to(player.roomId).emit('game-started', { gameState })
         
         // Game State Updates starten
-        startGameStateUpdates(player.roomId, io, gameEngine, playerManager)
+        if (room.gameSettings.is3D) {
+          startGameStateUpdates3D(player.roomId, io, gameEngine3D, playerManager)
+        } else {
+          startGameStateUpdates(player.roomId, io, gameEngine, playerManager)
+        }
         
         console.log(`🚀 Spiel gestartet in Raum ${room.code}`)
         
@@ -233,7 +247,7 @@ export function setupSocketHandlers(io: Server, services: Services) {
     })
 
     // Spiel neu starten
-    socket.on('restart-game', async (data: RestartGameEvent) => {
+    socket.on('restart-game', async (_data: RestartGameEvent) => {
       try {
         const player = await playerManager.getPlayerBySocket(socket.id)
         if (!player) {
@@ -255,6 +269,7 @@ export function setupSocketHandlers(io: Server, services: Services) {
         
         // Aktuelles Spiel stoppen falls es läuft
         gameEngine.stopGame(player.roomId)
+        gameEngine3D.stopGame(player.roomId)
         
         // Raum-Status zurück auf 'waiting' setzen
         await roomManager.updateRoomStatus(player.roomId, 'waiting')
@@ -295,7 +310,13 @@ export function setupSocketHandlers(io: Server, services: Services) {
           return
         }
         
-        await gameEngine.processPlayerInput(player.roomId, player.id, data.direction)
+        // Prüfen ob 3D-Spiel läuft
+        const room = await roomManager.getRoom(player.roomId)
+        if (room?.gameSettings.is3D) {
+          await gameEngine3D.processPlayerInput(player.roomId, player.id, data.direction as any)
+        } else {
+          await gameEngine.processPlayerInput(player.roomId, player.id, data.direction)
+        }
         
       } catch (error) {
         console.error('Fehler beim Verarbeiten des Spieler-Inputs:', error)
@@ -333,6 +354,78 @@ export function setupSocketHandlers(io: Server, services: Services) {
       }
     })
 
+    // Spieleinstellungen aktualisieren
+    socket.on('update-game-settings', async (data: UpdateGameSettingsEvent) => {
+      try {
+        const player = await playerManager.getPlayerBySocket(socket.id)
+        if (!player) {
+          socket.emit('error', { message: 'Spieler nicht gefunden' })
+          return
+        }
+        
+        const room = await roomManager.getRoom(player.roomId)
+        if (!room) {
+          socket.emit('error', { message: 'Raum nicht gefunden' })
+          return
+        }
+        
+        // Nur Host kann Einstellungen ändern
+        if (!roomManager.isPlayerHost(player.id, player.roomId)) {
+          socket.emit('error', { message: 'Nur der Host kann die Einstellungen ändern' })
+          return
+        }
+        
+        // Einstellungen nur änderbar wenn Spiel nicht läuft
+        if (room.status === 'playing') {
+          socket.emit('error', { message: 'Einstellungen können nicht während des Spiels geändert werden' })
+          return
+        }
+        
+        // Einstellungen validieren und aktualisieren
+        const updatedSettings = {
+          ...room.gameSettings,
+          ...data.gameSettings
+        }
+        
+        // Validierung der Einstellungen
+        if (updatedSettings.maxPlayers < 2 || updatedSettings.maxPlayers > 4) {
+          socket.emit('error', { message: 'Maximale Spieleranzahl muss zwischen 2 und 4 liegen' })
+          return
+        }
+        
+        if (updatedSettings.gameSpeed < 1 || updatedSettings.gameSpeed > 5) {
+           socket.emit('error', { message: 'Ungültige Spielgeschwindigkeit' })
+           return
+         }
+        
+        if (!['small', 'medium', 'large'].includes(updatedSettings.boardSize)) {
+          socket.emit('error', { message: 'Ungültige Spielfeldgröße' })
+          return
+        }
+        
+        if (!['classic', 'battle-royale'].includes(updatedSettings.gameMode)) {
+           socket.emit('error', { message: 'Ungültiger Spielmodus' })
+           return
+         }
+        
+        // Einstellungen im Raum aktualisieren
+        await roomManager.updateGameSettings(player.roomId, updatedSettings)
+        
+        // Aktualisierte Einstellungen an alle Spieler senden
+        const settingsUpdate: GameSettingsUpdatedEvent = {
+          gameSettings: updatedSettings
+        }
+        
+        io.to(player.roomId).emit('game-settings-updated', settingsUpdate)
+        
+        console.log(`⚙️ Spieleinstellungen aktualisiert in Raum ${room.code}`)
+        
+      } catch (error) {
+        console.error('Fehler beim Aktualisieren der Spieleinstellungen:', error)
+        socket.emit('error', { message: 'Fehler beim Aktualisieren der Einstellungen' })
+      }
+    })
+
     // Verbindung getrennt
     socket.on('disconnect', async () => {
       try {
@@ -354,10 +447,18 @@ export function setupSocketHandlers(io: Server, services: Services) {
           // Spielerliste aktualisieren
           await updatePlayerList(roomId, io, roomManager, playerManager)
           
-          // Spiel stoppen falls es läuft
+          // Spiel stoppen falls es läuft (2D oder 3D)
           const gameState = gameEngine.getGameState(roomId)
+          const gameState3D = gameEngine3D.getGameState(roomId)
+          
           if (gameState && gameState.gameStatus === 'playing') {
             gameEngine.stopGame(roomId)
+            await roomManager.updateRoomStatus(roomId, 'waiting')
+            io.to(roomId).emit('game-ended', { results: [], duration: 0 })
+          }
+          
+          if (gameState3D && gameState3D.gameStatus === 'playing') {
+            gameEngine3D.stopGame(roomId)
             await roomManager.updateRoomStatus(roomId, 'waiting')
             io.to(roomId).emit('game-ended', { results: [], duration: 0 })
           }
@@ -426,7 +527,51 @@ function startGameStateUpdates(roomId: string, io: Server, gameEngine: GameEngin
     
     // Game State Update senden
     const update: GameStateUpdateEvent = {
-      gameState,
+      gameState: gameState as any, // 3D GameState wird als 2D behandelt für Kompatibilität
+      timestamp: Date.now()
+    }
+    
+    io.to(roomId).emit('game-state-update', update)
+  }, 1000 / 60) // 60 FPS
+}
+
+function startGameStateUpdates3D(roomId: string, io: Server, gameEngine3D: GameEngine3D, playerManager: PlayerManager) {
+  const updateInterval = setInterval(async () => {
+    const gameState = gameEngine3D.getGameState(roomId)
+    if (!gameState) {
+      clearInterval(updateInterval)
+      return
+    }
+    
+    if (gameState.gameStatus === 'finished') {
+      clearInterval(updateInterval)
+      
+      // Spiel-Ergebnisse mit Spielernamen abrufen
+      const results = gameEngine3D.getGameResults(roomId)
+      
+      // Spielernamen zu den Results hinzufügen
+      const resultsWithNames = await Promise.all(
+        results.map(async (result) => {
+          const player = await playerManager.getPlayer(result.playerId)
+          return {
+            ...result,
+            playerName: player?.name || 'Unbekannt'
+          }
+        })
+      )
+      
+      const gameEndedEvent: GameEndedEvent = {
+        results: resultsWithNames,
+        duration: 0 // Wird von der Game Engine berechnet
+      }
+      
+      io.to(roomId).emit('game-ended', gameEndedEvent)
+      return
+    }
+    
+    // Game State Update senden
+    const update: GameStateUpdateEvent = {
+      gameState: gameState as any, // 3D GameState wird als 2D behandelt für Kompatibilität
       timestamp: Date.now()
     }
     

@@ -15,21 +15,23 @@
     "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.4",
-    "socket.io-client": "^4.7.4",
-    "redis": "^4.6.12",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
+    "@types/three": "^0.179.0",
+    "clsx": "^2.0.0",
     "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "helmet": "^7.1.0",
+    "lucide-react": "^0.294.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.1",
-    "zustand": "^4.4.7",
-    "lucide-react": "^0.294.0",
+    "redis": "^4.6.12",
+    "socket.io": "^4.7.4",
+    "socket.io-client": "^4.7.4",
     "sonner": "^1.2.4",
-    "clsx": "^2.0.0",
-    "tailwind-merge": "^2.0.0"
+    "tailwind-merge": "^2.0.0",
+    "three": "^0.179.1",
+    "zustand": "^4.4.7"
   },
   "devDependencies": {
     "@types/react": "^18.2.37",

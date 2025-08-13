@@ -1,17 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { Users, Plus, LogIn, Settings, Volume2 } from 'lucide-react'
+import { Plus, LogIn } from 'lucide-react'
 import { useSocket } from '../hooks/use-socket'
 import { useGame, useGameSelectors } from '../stores/game-store'
-import { PLAYER_COLORS } from '../../shared/types'
 import type { GameSettings } from '../../shared/types'
 
 function HomePage() {
   const navigate = useNavigate()
   const { createRoom, joinRoom, isConnected } = useSocket()
   const { setPlayerInfo, isLoading, error } = useGame()
-  
+
   const [playerName, setPlayerName] = useState('')
   const [roomCode, setRoomCode] = useState('')
   const [showCreateRoom, setShowCreateRoom] = useState(false)
@@ -19,24 +18,25 @@ function HomePage() {
     maxPlayers: 4,
     gameSpeed: 3,
     boardSize: 'medium',
-    gameMode: 'classic'
+    gameMode: 'classic',
+    is3D: false
   })
 
   const handleCreateRoom = (e?: React.FormEvent) => {
     e?.preventDefault()
-    
+
     if (!playerName.trim()) {
       toast.error('Bitte gib einen Spielernamen ein')
       return
     }
-    
+
     if (playerName.trim().length < 2) {
       toast.error('Name muss mindestens 2 Zeichen lang sein')
       return
     }
-    
+
     setPlayerInfo(playerName.trim(), '')
-    
+
     createRoom({
       playerName: playerName.trim(),
       playerColor: '', // Wird vom Server automatisch zugewiesen
@@ -46,24 +46,24 @@ function HomePage() {
 
   const handleJoinRoom = (e?: React.FormEvent) => {
     e?.preventDefault()
-    
+
     if (!playerName.trim()) {
       toast.error('Bitte gib einen Spielernamen ein')
       return
     }
-    
+
     if (!roomCode.trim()) {
       toast.error('Bitte gib einen Raum-Code ein')
       return
     }
-    
+
     if (roomCode.trim().length !== 6) {
       toast.error('Raum-Code muss 6 Zeichen lang sein')
       return
     }
-    
+
     setPlayerInfo(playerName.trim(), '')
-    
+
     joinRoom({
       roomCode: roomCode.trim().toUpperCase(),
       playerName: playerName.trim(),
@@ -84,23 +84,23 @@ function HomePage() {
 
   // Store beim Laden der Home-Page zurücksetzen
   const { reset } = useGame()
-  
+
   useEffect(() => {
     // Store zurücksetzen um alte roomId-Werte zu entfernen
     console.log('🏠 Home-Page geladen, setze Store zurück')
     reset()
   }, [reset])
-  
+
   // Navigation erfolgt nur nach erfolgreicher Socket-Antwort
   const roomInfo = useGameSelectors.roomInfo()
-  
+
   useEffect(() => {
     // Für Hosts: Warten auf roomId UND roomCode (da sie den room-code Event erhalten)
     // Für beitretende Spieler: Nur auf roomId warten (sie erhalten keinen roomCode)
     const shouldNavigate = roomInfo.roomId && !isLoading && (
       roomInfo.isHost ? roomInfo.roomCode : true // Host braucht Code, Beitretende nicht
     )
-    
+
     if (shouldNavigate) {
       console.log('🏠 Navigiere zur Lobby nach erfolgreicher Raum-Aktion:', {
         roomId: roomInfo.roomId,
@@ -122,7 +122,7 @@ function HomePage() {
           <p className="text-white/80 text-lg">
             Multiplayer für 2-4 Spieler
           </p>
-          
+
           {/* Verbindungsstatus */}
           <div className="mt-4 flex items-center justify-center gap-2">
             <div className={`w-2 h-2 rounded-full ${
@@ -132,7 +132,7 @@ function HomePage() {
               {isConnected ? 'Verbunden' : 'Nicht verbunden'}
             </span>
           </div>
-          
+
           {/* Debug-Button für Store Reset */}
           {roomInfo.roomId && (
             <div className="mt-2">
@@ -166,25 +166,6 @@ function HomePage() {
               maxLength={20}
               disabled={isLoading}
             />
-          </div>
-
-          {/* Automatische Farbzuweisung - Info */}
-          <div className="mb-6">
-            <div className="bg-white/10 rounded-lg p-3 text-center">
-              <div className="text-white/90 text-sm mb-2">
-                🎨 Deine Farbe wird automatisch zugewiesen
-              </div>
-              <div className="flex justify-center gap-2">
-                {PLAYER_COLORS.map((color, index) => (
-                  <div
-                    key={color}
-                    className="w-6 h-6 rounded-full border border-white/30"
-                    style={{ backgroundColor: color }}
-                    title={`Spieler ${index + 1}`}
-                  />
-                ))}
-              </div>
-            </div>
           </div>
 
           {/* Fehler-Anzeige */}
@@ -227,7 +208,7 @@ function HomePage() {
                       <option value={4}>4 Spieler</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs text-white/70 mb-1">
                       Geschwindigkeit
@@ -248,7 +229,7 @@ function HomePage() {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs text-white/70 mb-1">
@@ -267,7 +248,7 @@ function HomePage() {
                       <option value="large">Groß</option>
                     </select>
                   </div>
-                  
+
                   <div>
                     <label className="block text-xs text-white/70 mb-1">
                       Spielmodus
@@ -286,6 +267,34 @@ function HomePage() {
                   </div>
                 </div>
                 
+                {/* 3D-Modus Toggle */}
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                  <div>
+                    <label className="text-sm font-medium text-white/90">
+                      🎮 3D-Modus
+                    </label>
+                    <p className="text-xs text-white/60 mt-1">
+                      Spiele Snake in einer 3D-Umgebung
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setGameSettings(prev => ({
+                      ...prev,
+                      is3D: !prev.is3D
+                    }))}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      gameSettings.is3D ? 'bg-blue-600' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        gameSettings.is3D ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
                 <form onSubmit={handleCreateRoom}>
                   <button
                     type="submit"
@@ -324,7 +333,7 @@ function HomePage() {
                 maxLength={6}
                 disabled={isLoading}
               />
-              
+
               <button
                 type="submit"
                 className="btn-glass w-full flex items-center justify-center gap-2"

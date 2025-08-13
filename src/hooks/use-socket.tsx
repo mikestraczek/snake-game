@@ -13,7 +13,8 @@ import type {
   PlayerListUpdateEvent,
   GameStateUpdateEvent,
   GameEndedEvent,
-  ChatMessageReceiveEvent
+  ChatMessageReceiveEvent,
+  GameSettings
 } from '../../shared/types'
 
 type SocketContextType = {
@@ -26,6 +27,7 @@ type SocketContextType = {
   restartGame: () => void
   sendGameInput: (direction: PlayerInputEvent['direction']) => void
   sendChatMessage: (message: string) => void
+  updateGameSettings: (gameSettings: GameSettings) => void
   disconnect: () => void
 }
 
@@ -108,6 +110,12 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     newSocket.on('player-list-update', (data: PlayerListUpdateEvent) => {
       console.log('👥 Spielerliste aktualisiert:', data.players)
       setPlayers(data.players)
+    })
+
+    newSocket.on('game-settings-updated', (data: { gameSettings: GameSettings }) => {
+      console.log('⚙️ Spiel-Einstellungen aktualisiert:', data.gameSettings)
+      setGameSettings(data.gameSettings)
+      toast.success('Einstellungen aktualisiert!')
     })
 
     // Spiel-Events
@@ -248,6 +256,16 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.emit('chat-message', data)
   }
 
+  const updateGameSettings = (gameSettings: GameSettings) => {
+    if (!socket) {
+      toast.error('Keine Verbindung zum Server')
+      return
+    }
+    
+    console.log('⚙️ Aktualisiere Spiel-Einstellungen:', gameSettings)
+    socket.emit('update-game-settings', { gameSettings })
+  }
+
   const disconnect = () => {
     if (socket) {
       socket.close()
@@ -265,6 +283,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     restartGame,
     sendGameInput,
     sendChatMessage,
+    updateGameSettings,
     disconnect
   }
 

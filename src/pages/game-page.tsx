@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Volume2, VolumeX, Users, Trophy, Eye } from 'lucide-react'
+import { Volume2, VolumeX, Trophy, Eye } from 'lucide-react'
 import { useSocket } from '../hooks/use-socket'
-import { useGame, useGameSelectors } from '../stores/game-store'
+import { useGameSelectors } from '../stores/game-store'
 import { useAudio } from '../hooks/use-audio'
 import { BOARD_SIZES } from '../../shared/types'
-import type { Direction, Position, PlayerGameState } from '../../shared/types'
+import type { Direction } from '../../shared/types'
 
 function GamePage() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -168,7 +168,7 @@ function GamePage() {
     }
     
     // Schlangen zeichnen
-    gameState.players.forEach((player, playerIndex) => {
+    gameState.players.forEach((player) => {
       if (!player.alive) return
       
       const playerColor = players.find(p => p.id === player.id)?.color || '#4ecdc4'
@@ -252,7 +252,6 @@ function GamePage() {
     )
   }
   
-  const currentPlayer = gameState.players.find(p => p.id === roomInfo.playerId)
   const alivePlayers = gameState.players.filter(p => p.alive)
   const sortedPlayers = [...gameState.players].sort((a, b) => b.score - a.score)
   

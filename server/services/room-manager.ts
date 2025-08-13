@@ -1,10 +1,8 @@
 import { randomBytes } from 'crypto'
 import type {
   RoomData,
-  PlayerData,
   GameSettings,
-  RoomInfo,
-  Player
+  RoomInfo
 } from '../../shared/types.js'
 
 export class RoomManager {
@@ -143,7 +141,7 @@ export class RoomManager {
   }
 
   // Spieler-Bereitschaft aktualisieren
-  async updatePlayerReady(playerId: string, ready: boolean): Promise<string | null> {
+  async updatePlayerReady(playerId: string, _ready: boolean): Promise<string | null> {
     const roomId = this.playerRooms.get(playerId)
     if (!roomId) {
       return null
@@ -155,6 +153,16 @@ export class RoomManager {
     }
     
     return roomId
+  }
+
+  // Spieleinstellungen aktualisieren
+  async updateGameSettings(roomId: string, gameSettings: GameSettings): Promise<void> {
+    const room = this.rooms.get(roomId)
+    if (room) {
+      room.gameSettings = gameSettings
+      room.lastActivity = Date.now()
+      console.log(`⚙️ Spieleinstellungen aktualisiert für Raum ${room.code}`)
+    }
   }
 
   // Aktive Räume abrufen
