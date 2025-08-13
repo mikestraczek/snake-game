@@ -41,8 +41,8 @@ export function setupSocketHandlers(io: Server, services: Services) {
           return
         }
         
-        // Verfügbare Farbe finden
-        const availableColor = data.playerColor || playerManager.getAvailableColor('temp')
+        // Automatische Farbzuweisung
+        const availableColor = playerManager.getAvailableColor('temp')
         
         // Raum erstellen
         const { roomId, roomCode } = await roomManager.createRoom(playerId, data.gameSettings)
@@ -106,8 +106,8 @@ export function setupSocketHandlers(io: Server, services: Services) {
           return
         }
         
-        // Verfügbare Farbe finden
-        const availableColor = data.playerColor || playerManager.getAvailableColor(room.id)
+        // Automatische Farbzuweisung
+        const availableColor = playerManager.getAvailableColor(room.id)
         
         // Spieler erstellen
         await playerManager.createOrUpdatePlayer(
@@ -222,7 +222,7 @@ export function setupSocketHandlers(io: Server, services: Services) {
         io.to(player.roomId).emit('game-started', { gameState })
         
         // Game State Updates starten
-        startGameStateUpdates(player.roomId, io, gameEngine)
+        startGameStateUpdates(player.roomId, io, gameEngine, playerManager)
         
         console.log(`🚀 Spiel gestartet in Raum ${room.code}`)
         
@@ -390,8 +390,8 @@ async function updatePlayerList(
   io.to(roomId).emit('player-list-update', update)
 }
 
-function startGameStateUpdates(roomId: string, io: Server, gameEngine: GameEngine) {
-  const updateInterval = setInterval(() => {
+function startGameStateUpdates(roomId: string, io: Server, gameEngine: GameEngine, playerManager: PlayerManager) {
+  const updateInterval = setInterval(async () => {
     const gameState = gameEngine.getGameState(roomId)
     if (!gameState) {
       clearInterval(updateInterval)
@@ -401,10 +401,22 @@ function startGameStateUpdates(roomId: string, io: Server, gameEngine: GameEngin
     if (gameState.gameStatus === 'finished') {
       clearInterval(updateInterval)
       
-      // Spiel-Ergebnisse senden
+      // Spiel-Ergebnisse mit Spielernamen abrufen
       const results = gameEngine.getGameResults(roomId)
+      
+      // Spielernamen zu den Results hinzufügen
+      const resultsWithNames = await Promise.all(
+        results.map(async (result) => {
+          const player = await playerManager.getPlayer(result.playerId)
+          return {
+            ...result,
+            playerName: player?.name || 'Unbekannt'
+          }
+        })
+      )
+      
       const gameEndedEvent: GameEndedEvent = {
-        results,
+        results: resultsWithNames,
         duration: 0 // Wird von der Game Engine berechnet
       }
       

@@ -13,7 +13,6 @@ function HomePage() {
   const { setPlayerInfo, isLoading, error } = useGame()
   
   const [playerName, setPlayerName] = useState('')
-  const [playerColor, setPlayerColor] = useState(PLAYER_COLORS[0])
   const [roomCode, setRoomCode] = useState('')
   const [showCreateRoom, setShowCreateRoom] = useState(false)
   const [gameSettings, setGameSettings] = useState<GameSettings>({
@@ -36,11 +35,11 @@ function HomePage() {
       return
     }
     
-    setPlayerInfo(playerName.trim(), playerColor)
+    setPlayerInfo(playerName.trim(), '')
     
     createRoom({
       playerName: playerName.trim(),
-      playerColor,
+      playerColor: '', // Wird vom Server automatisch zugewiesen
       gameSettings
     })
   }
@@ -63,12 +62,12 @@ function HomePage() {
       return
     }
     
-    setPlayerInfo(playerName.trim(), playerColor)
+    setPlayerInfo(playerName.trim(), '')
     
     joinRoom({
       roomCode: roomCode.trim().toUpperCase(),
       playerName: playerName.trim(),
-      playerColor
+      playerColor: '' // Wird vom Server automatisch zugewiesen
     })
   }
 
@@ -169,25 +168,22 @@ function HomePage() {
             />
           </div>
 
-          {/* Farb-Auswahl */}
+          {/* Automatische Farbzuweisung - Info */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-white/90 mb-2">
-              Deine Farbe
-            </label>
-            <div className="flex gap-2">
-              {PLAYER_COLORS.map((color) => (
-                <button
-                  key={color}
-                  onClick={() => setPlayerColor(color)}
-                  className={`w-8 h-8 rounded-full border-2 transition-all duration-200 ${
-                    playerColor === color
-                      ? 'border-white scale-110'
-                      : 'border-white/30 hover:border-white/60'
-                  }`}
-                  style={{ backgroundColor: color }}
-                  disabled={isLoading}
-                />
-              ))}
+            <div className="bg-white/10 rounded-lg p-3 text-center">
+              <div className="text-white/90 text-sm mb-2">
+                🎨 Deine Farbe wird automatisch zugewiesen
+              </div>
+              <div className="flex justify-center gap-2">
+                {PLAYER_COLORS.map((color, index) => (
+                  <div
+                    key={color}
+                    className="w-6 h-6 rounded-full border border-white/30"
+                    style={{ backgroundColor: color }}
+                    title={`Spieler ${index + 1}`}
+                  />
+                ))}
+              </div>
             </div>
           </div>
 
