@@ -6,15 +6,21 @@ import type {
   JoinRoomEvent,
   CreateRoomEvent,
   PlayerInputEvent,
+  PlayerInputEvent3D,
   PlayerReadyEvent,
   ChatMessageEvent,
   RestartGameEvent,
+  AddBotEvent,
+  RemoveBotEvent,
   RoomJoinedEvent,
   PlayerListUpdateEvent,
   GameStateUpdateEvent,
   GameEndedEvent,
   ChatMessageReceiveEvent,
-  GameSettings
+  BotAddedEvent,
+  BotRemovedEvent,
+  GameSettings,
+  BotDifficulty
 } from '../../shared/types'
 
 type SocketContextType = {
@@ -25,9 +31,11 @@ type SocketContextType = {
   setPlayerReady: (ready: boolean) => void
   startGame: () => void
   restartGame: () => void
-  sendGameInput: (direction: PlayerInputEvent['direction']) => void
+  sendGameInput: (direction: PlayerInputEvent['direction'] | PlayerInputEvent3D['direction']) => void
   sendChatMessage: (message: string) => void
   updateGameSettings: (gameSettings: GameSettings) => void
+  addBot: (difficulty: BotDifficulty) => void
+  removeBot: (botId: string) => void
   disconnect: () => void
 }
 
@@ -52,7 +60,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Socket.io Verbindung erstellen
-    const newSocket = io({
+    const newSocket = io('http://localhost:3002', {
       transports: ['websocket', 'polling'],
       timeout: 20000,
       forceNew: true
@@ -156,6 +164,17 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       }
     })
 
+    // Bot-Events
+    newSocket.on('bot-added', (data: BotAddedEvent) => {
+      console.log('🤖 Bot hinzugefügt:', data.bot)
+      toast.success(`Bot ${data.bot.name} hinzugefügt!`)
+    })
+
+    newSocket.on('bot-removed', (data: BotRemovedEvent) => {
+      console.log('🗑️ Bot entfernt:', data.botId)
+      toast.info('Bot entfernt')
+    })
+
     // Fehler-Events
     newSocket.on('error', (data: { message: string }) => {
       console.error('❌ Server-Fehler:', data.message)
@@ -228,15 +247,25 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.emit('restart-game', data)
   }
 
-  const sendGameInput = (direction: PlayerInputEvent['direction']) => {
+  const sendGameInput = (direction: PlayerInputEvent['direction'] | PlayerInputEvent3D['direction']) => {
     if (!socket) return
     
-    const data: PlayerInputEvent = {
-      direction,
-      timestamp: Date.now()
-    }
+    // Prüfe ob es eine 3D-Richtung ist
+    const is3D = ['forward', 'backward'].includes(direction as string)
     
-    socket.emit('game-input', data)
+    if (is3D) {
+      const data: PlayerInputEvent3D = {
+        direction: direction as PlayerInputEvent3D['direction'],
+        timestamp: Date.now()
+      }
+      socket.emit('game-input-3d', data)
+    } else {
+      const data: PlayerInputEvent = {
+        direction: direction as PlayerInputEvent['direction'],
+        timestamp: Date.now()
+      }
+      socket.emit('game-input', data)
+    }
   }
 
   const sendChatMessage = (message: string) => {
@@ -266,6 +295,28 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     socket.emit('update-game-settings', { gameSettings })
   }
 
+  const addBot = (difficulty: BotDifficulty) => {
+    if (!socket) {
+      toast.error('Keine Verbindung zum Server')
+      return
+    }
+    
+    console.log('🤖 Füge Bot hinzu:', difficulty)
+    const data: AddBotEvent = { difficulty }
+    socket.emit('add-bot', data)
+  }
+
+  const removeBot = (botId: string) => {
+    if (!socket) {
+      toast.error('Keine Verbindung zum Server')
+      return
+    }
+    
+    console.log('🗑️ Entferne Bot:', botId)
+    const data: RemoveBotEvent = { botId }
+    socket.emit('remove-bot', data)
+  }
+
   const disconnect = () => {
     if (socket) {
       socket.close()
@@ -284,6 +335,8 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     sendGameInput,
     sendChatMessage,
     updateGameSettings,
+    addBot,
+    removeBot,
     disconnect
   }
 

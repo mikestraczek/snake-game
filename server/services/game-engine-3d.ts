@@ -7,6 +7,7 @@ import type {
   GameResult
 } from '../../shared/types.js'
 import { BOARD_SIZES_3D } from '../../shared/types.js'
+import { serviceManager } from './service-manager.js'
 
 export class GameEngine3D {
   private gameStates = new Map<string, GameState3D>()
@@ -140,14 +141,31 @@ export class GameEngine3D {
   private startGameLoop(roomId: string, gameSettings: GameSettings): void {
     const tickRate = Math.max(150, 400 - (gameSettings.gameSpeed * 50)) // Etwas langsamer für 3D
     
-    const timer = setInterval(() => {
-      this.updateGame(roomId, gameSettings)
+    const timer = setInterval(async () => {
+      await this.updateGame(roomId, gameSettings)
     }, tickRate)
     
     this.gameTimers.set(roomId, timer)
   }
 
-  private updateGame(roomId: string, gameSettings: GameSettings): void {
+  // Bot-Bewegungen verarbeiten
+  private async processBotMoves(
+    roomId: string,
+    gameState: GameState3D,
+    gameSettings: GameSettings
+  ): Promise<void> {
+    try {
+      const botMoves = await serviceManager.getAllBotMoves3D(roomId, gameState, gameSettings)
+      
+      for (const [botId, direction] of botMoves.entries()) {
+        await this.processPlayerInput(roomId, botId, direction)
+      }
+    } catch (error) {
+      console.error('Fehler beim Verarbeiten der 3D Bot-Bewegungen:', error)
+    }
+  }
+
+  private async updateGame(roomId: string, gameSettings: GameSettings): Promise<void> {
     const gameState = this.gameStates.get(roomId)
     if (!gameState || gameState.gameStatus !== 'playing') {
       return
@@ -155,6 +173,9 @@ export class GameEngine3D {
     
     const boardSize = BOARD_SIZES_3D[gameSettings.boardSize]
     const tileCount = boardSize.width / boardSize.gridSize
+    
+    // Bot-Bewegungen abrufen und anwenden
+    await this.processBotMoves(roomId, gameState, gameSettings)
     
     // Alle lebenden Spieler bewegen
     for (const player of gameState.players) {

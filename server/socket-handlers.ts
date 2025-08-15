@@ -4,20 +4,26 @@ import type { RoomManager } from './services/room-manager.js'
 import type { GameEngine } from './services/game-engine.js'
 import type { GameEngine3D } from './services/game-engine-3d.js'
 import type { PlayerManager } from './services/player-manager.js'
+import { serviceManager } from './services/service-manager.js'
 import type {
   JoinRoomEvent,
   CreateRoomEvent,
   PlayerInputEvent,
+  PlayerInputEvent3D,
   PlayerReadyEvent,
   ChatMessageEvent,
   RestartGameEvent,
   UpdateGameSettingsEvent,
+  AddBotEvent,
+  RemoveBotEvent,
   RoomJoinedEvent,
   PlayerListUpdateEvent,
   GameStateUpdateEvent,
   GameEndedEvent,
   ChatMessageReceiveEvent,
-  GameSettingsUpdatedEvent
+  GameSettingsUpdatedEvent,
+  BotAddedEvent,
+  BotRemovedEvent
 } from '../shared/types.js'
 
 type Services = {
@@ -274,11 +280,17 @@ export function setupSocketHandlers(io: Server, services: Services) {
         // Raum-Status zurück auf 'waiting' setzen
         await roomManager.updateRoomStatus(player.roomId, 'waiting')
         
-        // Alle Spieler auf 'nicht bereit' setzen
+        // Alle Spieler auf 'nicht bereit' setzen, aber Bots automatisch wieder bereit machen
         const playersInRoom = await playerManager.getPlayersInRoom(player.roomId)
         for (const roomPlayer of playersInRoom) {
           await playerManager.updatePlayerReady(roomPlayer.id, false)
           await roomManager.updatePlayerReady(roomPlayer.id, false)
+          
+          // Bots automatisch wieder bereit machen
+          if (roomPlayer.isBot) {
+            await playerManager.updatePlayerReady(roomPlayer.id, true)
+            await roomManager.updatePlayerReady(roomPlayer.id, true)
+          }
         }
         
         // Spielerliste aktualisieren
@@ -302,7 +314,7 @@ export function setupSocketHandlers(io: Server, services: Services) {
       }
     })
 
-    // Spieler-Input
+    // Spieler-Input (2D)
     socket.on('game-input', async (data: PlayerInputEvent) => {
       try {
         const player = await playerManager.getPlayerBySocket(socket.id)
@@ -310,16 +322,25 @@ export function setupSocketHandlers(io: Server, services: Services) {
           return
         }
         
-        // Prüfen ob 3D-Spiel läuft
-        const room = await roomManager.getRoom(player.roomId)
-        if (room?.gameSettings.is3D) {
-          await gameEngine3D.processPlayerInput(player.roomId, player.id, data.direction as any)
-        } else {
-          await gameEngine.processPlayerInput(player.roomId, player.id, data.direction)
-        }
+        await gameEngine.processPlayerInput(player.roomId, player.id, data.direction)
         
       } catch (error) {
-        console.error('Fehler beim Verarbeiten des Spieler-Inputs:', error)
+        console.error('Fehler beim Verarbeiten des 2D Spieler-Inputs:', error)
+      }
+    })
+
+    // Spieler-Input (3D)
+    socket.on('game-input-3d', async (data: PlayerInputEvent3D) => {
+      try {
+        const player = await playerManager.getPlayerBySocket(socket.id)
+        if (!player) {
+          return
+        }
+        
+        await gameEngine3D.processPlayerInput(player.roomId, player.id, data.direction)
+        
+      } catch (error) {
+        console.error('Fehler beim Verarbeiten des 3D Spieler-Inputs:', error)
       }
     })
 
@@ -351,6 +372,128 @@ export function setupSocketHandlers(io: Server, services: Services) {
       } catch (error) {
         console.error('Fehler beim Senden der Chat-Nachricht:', error)
         socket.emit('error', { message: 'Fehler beim Senden der Nachricht' })
+      }
+    })
+
+    // Bot hinzufügen
+    socket.on('add-bot', async (data: AddBotEvent) => {
+      try {
+        const player = await playerManager.getPlayerBySocket(socket.id)
+        if (!player) {
+          socket.emit('error', { message: 'Spieler nicht gefunden' })
+          return
+        }
+        
+        const room = await roomManager.getRoom(player.roomId)
+        if (!room) {
+          socket.emit('error', { message: 'Raum nicht gefunden' })
+          return
+        }
+        
+        // Nur Host kann Bots hinzufügen
+        if (!roomManager.isPlayerHost(player.id, player.roomId)) {
+          socket.emit('error', { message: 'Nur der Host kann Bots hinzufügen' })
+          return
+        }
+        
+        // Bots nur hinzufügbar wenn Spiel nicht läuft
+        if (room.status === 'playing') {
+          socket.emit('error', { message: 'Bots können nicht während des Spiels hinzugefügt werden' })
+          return
+        }
+        
+        // Bot hinzufügen
+        const bot = await serviceManager.addBotToRoom(player.roomId, data.difficulty)
+        if (!bot) {
+          socket.emit('error', { message: 'Bot konnte nicht hinzugefügt werden' })
+          return
+        }
+        
+        // Bot-hinzugefügt Event senden
+        const botAddedEvent: BotAddedEvent = { bot }
+        io.to(player.roomId).emit('bot-added', botAddedEvent)
+        
+        // Spielerliste aktualisieren
+        await updatePlayerList(player.roomId, io, roomManager, playerManager)
+        
+        // Chat-Nachricht: Bot hinzugefügt
+        const botMessage: ChatMessageReceiveEvent = {
+          playerId: 'system',
+          playerName: 'System',
+          message: `Bot ${bot.name} (${data.difficulty}) wurde hinzugefügt`,
+          timestamp: Date.now()
+        }
+        
+        io.to(player.roomId).emit('chat-message', botMessage)
+        
+        console.log(`🤖 Bot ${bot.name} zu Raum ${room.code} hinzugefügt`)
+        
+      } catch (error) {
+        console.error('Fehler beim Hinzufügen des Bots:', error)
+        socket.emit('error', { message: 'Fehler beim Hinzufügen des Bots' })
+      }
+    })
+
+    // Bot entfernen
+    socket.on('remove-bot', async (data: RemoveBotEvent) => {
+      try {
+        const player = await playerManager.getPlayerBySocket(socket.id)
+        if (!player) {
+          socket.emit('error', { message: 'Spieler nicht gefunden' })
+          return
+        }
+        
+        const room = await roomManager.getRoom(player.roomId)
+        if (!room) {
+          socket.emit('error', { message: 'Raum nicht gefunden' })
+          return
+        }
+        
+        // Nur Host kann Bots entfernen
+        if (!roomManager.isPlayerHost(player.id, player.roomId)) {
+          socket.emit('error', { message: 'Nur der Host kann Bots entfernen' })
+          return
+        }
+        
+        // Bots nur entfernbar wenn Spiel nicht läuft
+        if (room.status === 'playing') {
+          socket.emit('error', { message: 'Bots können nicht während des Spiels entfernt werden' })
+          return
+        }
+        
+        // Bot-Namen für Chat-Nachricht abrufen
+        const botPlayer = await playerManager.getPlayer(data.botId)
+        const botName = botPlayer?.name || 'Unbekannt'
+        
+        // Bot entfernen
+        const success = await serviceManager.removeBotFromRoom(player.roomId, data.botId)
+        if (!success) {
+          socket.emit('error', { message: 'Bot konnte nicht entfernt werden' })
+          return
+        }
+        
+        // Bot-entfernt Event senden
+        const botRemovedEvent: BotRemovedEvent = { botId: data.botId }
+        io.to(player.roomId).emit('bot-removed', botRemovedEvent)
+        
+        // Spielerliste aktualisieren
+        await updatePlayerList(player.roomId, io, roomManager, playerManager)
+        
+        // Chat-Nachricht: Bot entfernt
+        const botMessage: ChatMessageReceiveEvent = {
+          playerId: 'system',
+          playerName: 'System',
+          message: `Bot ${botName} wurde entfernt`,
+          timestamp: Date.now()
+        }
+        
+        io.to(player.roomId).emit('chat-message', botMessage)
+        
+        console.log(`🗑️ Bot ${botName} aus Raum ${room.code} entfernt`)
+        
+      } catch (error) {
+        console.error('Fehler beim Entfernen des Bots:', error)
+        socket.emit('error', { message: 'Fehler beim Entfernen des Bots' })
       }
     })
 

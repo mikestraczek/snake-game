@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Volume2, VolumeX, Users, Trophy, Eye, RotateCcw } from 'lucide-react'
+import { Volume2, VolumeX, Users, Trophy, Eye, RotateCcw, Info, Target } from 'lucide-react'
 import { useSocket } from '../hooks/use-socket'
 import { useGameSelectors } from '../stores/game-store'
 import { useAudio } from '../hooks/use-audio'
@@ -24,7 +24,7 @@ function GamePage3D() {
   
   // 3D-spezifische Zustände
   const [showControls, setShowControls] = useState(true)
-  const [cameraMode, setCameraMode] = useState<'free' | 'follow'>('free')
+  
   
   // Konvertiere 2D GameState zu 3D (temporär für Demo)
   const gameState3D: GameState3D | null = gameState ? {
@@ -41,7 +41,13 @@ function GamePage3D() {
   const boardSize3D = gameSettings ? BOARD_SIZES_3D[gameSettings.boardSize] : BOARD_SIZES_3D.medium
   
   // Three.js Hook
-  const { isInitialized } = useThree({
+  const { 
+     isInitialized, 
+     followMode, 
+     toggleFollowMode, 
+     updateCameraFollow, 
+     debugInfo 
+   } = useThree({
     containerRef,
     boardSize: boardSize3D,
     gameState: gameState3D,
@@ -82,7 +88,7 @@ function GamePage3D() {
     }
   }, [gameState, roomInfo.playerId, isSpectator, playSound])
   
-  // Sound-Effekte für Spiel-Events
+  // Sound-Effekte für Spiel-Events und Follow-Modus
   useEffect(() => {
     if (!gameState || !previousGameStateRef.current) {
       previousGameStateRef.current = gameState
@@ -120,8 +126,16 @@ function GamePage3D() {
       }
     }
     
+    // Follow-Modus für eigene Schlange
+    if (followMode && roomInfo.playerId) {
+      const playerSnake = currentState.players.find(p => p.id === roomInfo.playerId)
+      if (playerSnake && updateCameraFollow) {
+        updateCameraFollow(playerSnake)
+      }
+    }
+    
     previousGameStateRef.current = gameState
-  }, [gameState, roomInfo.playerId, playSound])
+  }, [gameState, roomInfo.playerId, playSound, followMode, updateCameraFollow])
   
   // 3D-Tastatur-Steuerung
   useEffect(() => {
@@ -159,7 +173,7 @@ function GamePage3D() {
           setShowControls(!showControls)
           break
         case 'c':
-          setCameraMode(prev => prev === 'free' ? 'follow' : 'free')
+          toggleFollowMode()
           break
       }
       
@@ -176,8 +190,8 @@ function GamePage3D() {
   
   const handleDirectionClick = (direction: Direction3D) => {
     if (!isSpectator) {
-      // Sende echte 3D-Richtung
-      sendGameInput(direction as any)
+      // Sende korrekt typisierte 3D-Richtung
+      sendGameInput(direction)
     }
   }
   
@@ -218,13 +232,23 @@ function GamePage3D() {
                   
                   <div className="flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 rounded-lg px-3 py-1">
                     <span className="text-blue-300 text-sm font-medium">
-                      Kamera: {cameraMode === 'free' ? 'Frei' : 'Verfolgung'}
+                      Kamera: {followMode ? 'Verfolgung' : 'Frei'}
                     </span>
                   </div>
                 </div>
                 
                 {/* Audio-Steuerung */}
                 <div className="flex items-center gap-3">
+                  <button
+                    onClick={toggleFollowMode}
+                    className={`p-2 hover:bg-white/20 rounded-lg transition-colors ${
+                      followMode ? 'bg-blue-500/30' : ''
+                    }`}
+                    title="Follow-Modus umschalten"
+                  >
+                    <Target className="w-5 h-5 text-white" />
+                  </button>
+                  
                   <button
                     onClick={() => setShowControls(!showControls)}
                     className="p-2 hover:bg-white/20 rounded-lg transition-colors"
@@ -283,10 +307,25 @@ function GamePage3D() {
                     <div><kbd className="bg-white/20 px-1 rounded">WASD</kbd> / <kbd className="bg-white/20 px-1 rounded">Pfeiltasten</kbd> - Bewegung</div>
                     <div><kbd className="bg-white/20 px-1 rounded">Q/E</kbd> - Hoch/Runter</div>
                     <div><kbd className="bg-white/20 px-1 rounded">H</kbd> - Hilfe ein/aus</div>
-                    <div><kbd className="bg-white/20 px-1 rounded">C</kbd> - Kamera-Modus</div>
+                    <div><kbd className="bg-white/20 px-1 rounded">Target-Button</kbd> - Follow-Modus</div>
                     <div className="text-xs text-white/60 mt-2">
                       Maus: Kamera drehen & zoomen
                     </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Debug-Informationen */}
+              {debugInfo && (
+                <div className="absolute bottom-4 left-4 bg-black/50 backdrop-blur-sm rounded-lg p-3 text-white text-xs">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Info className="h-3 w-3" />
+                    <span className="font-semibold">Debug Info</span>
+                  </div>
+                  <div className="space-y-1">
+                    <div>Kamera: {debugInfo.cameraPos}</div>
+                    <div>Objekte: {debugInfo.objectCount}</div>
+                    <div>Follow-Modus: {followMode ? 'An' : 'Aus'}</div>
                   </div>
                 </div>
               )}

@@ -1,7 +1,9 @@
 import type {
   PlayerData,
   Player,
-  SessionData
+  SessionData,
+  BotData,
+  BotDifficulty
 } from '../../shared/types.js'
 import { PLAYER_COLORS } from '../../shared/types.js'
 
@@ -16,7 +18,9 @@ export class PlayerManager {
     socketId: string,
     name: string,
     color: string,
-    roomId: string
+    roomId: string,
+    isBot: boolean = false,
+    botDifficulty?: BotDifficulty
   ): Promise<PlayerData> {
     const existingPlayer = this.players.get(playerId)
     
@@ -26,8 +30,10 @@ export class PlayerManager {
       color,
       roomId,
       socketId,
-      ready: existingPlayer?.ready || false,
-      joinedAt: existingPlayer?.joinedAt || Date.now()
+      ready: existingPlayer?.ready || isBot, // Bots sind automatisch bereit
+      joinedAt: existingPlayer?.joinedAt || Date.now(),
+      isBot,
+      botDifficulty
     }
     
     this.players.set(playerId, playerData)
@@ -43,7 +49,7 @@ export class PlayerManager {
     
     this.sessions.set(socketId, sessionData)
     
-    console.log(`👤 Spieler ${name} (${playerId}) erstellt/aktualisiert`)
+    console.log(`${isBot ? '🤖' : '👤'} ${isBot ? 'Bot' : 'Spieler'} ${name} (${playerId}) erstellt/aktualisiert`)
     
     return playerData
   }
@@ -157,7 +163,8 @@ export class PlayerManager {
       ready: player.ready,
       isHost: player.id === hostId,
       score: 0, // Wird während des Spiels aktualisiert
-      alive: true // Wird während des Spiels aktualisiert
+      alive: true, // Wird während des Spiels aktualisiert
+      isBot: player.isBot || false
     }))
   }
 
@@ -190,6 +197,31 @@ export class PlayerManager {
     
     // Fallback: Erste Farbe wenn alle belegt
     return PLAYER_COLORS[0]
+  }
+
+  // Bot als Spieler hinzufügen
+  async addBotAsPlayer(botData: BotData): Promise<PlayerData> {
+    return this.createOrUpdatePlayer(
+      botData.id,
+      `bot_socket_${botData.id}`, // Virtuelle Socket-ID für Bots
+      botData.name,
+      botData.color,
+      botData.roomId,
+      true,
+      botData.difficulty
+    )
+  }
+
+  // Alle Bots in einem Raum abrufen
+  async getBotsInRoom(roomId: string): Promise<PlayerData[]> {
+    const players = await this.getPlayersInRoom(roomId)
+    return players.filter(player => player.isBot)
+  }
+
+  // Alle echten Spieler in einem Raum abrufen
+  async getRealPlayersInRoom(roomId: string): Promise<PlayerData[]> {
+    const players = await this.getPlayersInRoom(roomId)
+    return players.filter(player => !player.isBot)
   }
 
   // Prüfe ob Name in Raum verfügbar ist

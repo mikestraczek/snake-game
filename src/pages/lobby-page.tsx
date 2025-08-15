@@ -11,7 +11,10 @@ import {
   Settings,
   Play,
   LogOut,
-  MessageCircle
+  MessageCircle,
+  Bot,
+  Plus,
+  Trash2
 } from 'lucide-react'
 import { useSocket } from '../hooks/use-socket'
 import { useGameSelectors } from '../stores/game-store'
@@ -20,7 +23,7 @@ import type { Player } from '../../shared/types'
 function LobbyPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
-  const { setPlayerReady, startGame, sendChatMessage, disconnect, updateGameSettings } = useSocket()
+  const { setPlayerReady, startGame, sendChatMessage, disconnect, updateGameSettings, addBot, removeBot } = useSocket()
   
   const roomInfo = useGameSelectors.roomInfo()
   const players = useGameSelectors.players()
@@ -111,6 +114,29 @@ function LobbyPage() {
     
     const updatedSettings = { ...gameSettings, ...newSettings }
     updateGameSettings(updatedSettings)
+  }
+
+  const handleAddBot = (difficulty: 'easy' | 'medium' | 'hard') => {
+    if (!roomInfo.isHost) {
+      toast.error('Nur der Host kann Bots hinzufügen')
+      return
+    }
+    
+    if (players.length >= (gameSettings?.maxPlayers || 4)) {
+      toast.error('Raum ist bereits voll')
+      return
+    }
+    
+    addBot(difficulty)
+  }
+
+  const handleRemoveBot = (botId: string) => {
+    if (!roomInfo.isHost) {
+      toast.error('Nur der Host kann Bots entfernen')
+      return
+    }
+    
+    removeBot(botId)
   }
   
   // const currentPlayer = players.find(p => p.id === roomInfo.playerId)
@@ -313,13 +339,22 @@ function LobbyPage() {
                     key={player.id}
                     className="bg-white/10 rounded-lg p-4 flex items-center justify-between"
                   >
-                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3">
                       {/* Spieler-Avatar */}
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold"
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold relative"
                         style={{ backgroundColor: player.color }}
                       >
-                        {player.name.charAt(0).toUpperCase()}
+                        {player.isBot ? (
+                          <Bot className="w-5 h-5" />
+                        ) : (
+                          player.name.charAt(0).toUpperCase()
+                        )}
+                        {player.isBot && (
+                          <div className="absolute -top-1 -right-1 w-3 h-3 bg-purple-500 rounded-full flex items-center justify-center">
+                            <Bot className="w-2 h-2 text-white" />
+                          </div>
+                        )}
                       </div>
                       
                       {/* Spieler-Info */}
@@ -327,6 +362,9 @@ function LobbyPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-white font-medium">
                             {player.name}
+                            {player.isBot && (
+                              <span className="ml-1 text-xs text-purple-300">(Bot)</span>
+                            )}
                           </span>
                           {player.isHost && (
                             <Crown className="w-4 h-4 text-yellow-400" />
@@ -340,8 +378,18 @@ function LobbyPage() {
                       </div>
                     </div>
                     
-                    {/* Bereitschafts-Status */}
+                    {/* Bereitschafts-Status und Bot-Aktionen */}
                     <div className="flex items-center gap-2">
+                      {player.isBot && roomInfo.isHost ? (
+                        <button
+                          onClick={() => handleRemoveBot(player.id)}
+                          className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                          title="Bot entfernen"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-400" />
+                        </button>
+                      ) : null}
+                      
                       {player.ready ? (
                         <div className="flex items-center gap-1 text-green-400">
                           <Check className="w-4 h-4" />
@@ -357,8 +405,49 @@ function LobbyPage() {
                   </div>
                 ))}
                 
+                {/* Bot-Hinzufügen (nur für Host) */}
+                {roomInfo.isHost && players.length < (gameSettings?.maxPlayers || 4) && (
+                  <div className="bg-purple-500/10 border-2 border-dashed border-purple-500/30 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Bot className="w-5 h-5 text-purple-400" />
+                        <span className="text-white font-medium">Bot hinzufügen</span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleAddBot('easy')}
+                          className="btn-glass !bg-green-500/20 !border-green-500/30 hover:!bg-green-500/30 text-xs px-3 py-1"
+                          title="Einfacher Bot"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Einfach
+                        </button>
+                        <button
+                          onClick={() => handleAddBot('medium')}
+                          className="btn-glass !bg-yellow-500/20 !border-yellow-500/30 hover:!bg-yellow-500/30 text-xs px-3 py-1"
+                          title="Mittlerer Bot"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Mittel
+                        </button>
+                        <button
+                          onClick={() => handleAddBot('hard')}
+                          className="btn-glass !bg-red-500/20 !border-red-500/30 hover:!bg-red-500/30 text-xs px-3 py-1"
+                          title="Schwerer Bot"
+                        >
+                          <Plus className="w-3 h-3 mr-1" />
+                          Schwer
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-white/60 mt-2">
+                      Füge KI-Bots mit verschiedenen Schwierigkeitsgraden hinzu
+                    </p>
+                  </div>
+                )}
+                
                 {/* Leere Plätze */}
-                {Array.from({ length: (gameSettings?.maxPlayers || 4) - players.length }).map((_, index) => (
+                {Array.from({ length: Math.max(0, (gameSettings?.maxPlayers || 4) - players.length - (roomInfo.isHost ? 1 : 0)) }).map((_, index) => (
                   <div
                     key={`empty-${index}`}
                     className="bg-white/5 border-2 border-dashed border-white/20 rounded-lg p-4 flex items-center justify-center"

@@ -4,10 +4,9 @@ import { Server } from 'socket.io'
 import cors from 'cors'
 import helmet from 'helmet'
 import compression from 'compression'
-import { RoomManager } from './services/room-manager.js'
+import { serviceManager } from './services/service-manager.js'
 import { GameEngine } from './services/game-engine.js'
 import { GameEngine3D } from './services/game-engine-3d.js'
-import { PlayerManager } from './services/player-manager.js'
 import { setupSocketHandlers } from './socket-handlers.js'
 // Removed unused type imports
 
@@ -46,11 +45,10 @@ app.use(cors({
 app.use(express.json())
 app.use(express.static('dist/client'))
 
-// Services
-const roomManager = new RoomManager()
+// Services (über Service-Manager)
+const { roomManager, playerManager } = serviceManager
 const gameEngine = new GameEngine()
 const gameEngine3D = new GameEngine3D()
-const playerManager = new PlayerManager()
 
 // REST API Routes
 app.get('/api/health', (_req, res) => {
@@ -99,12 +97,13 @@ setupSocketHandlers(io, {
   playerManager
 })
 
-// Cleanup inactive rooms every 5 minutes
+// Cleanup inactive rooms and players every 5 minutes
 setInterval(async () => {
   try {
     await roomManager.cleanupInactiveRooms()
+    await playerManager.cleanupInactiveSessions()
   } catch (error) {
-    console.error('Error during room cleanup:', error)
+    console.error('Error during cleanup:', error)
   }
 }, 5 * 60 * 1000)
 

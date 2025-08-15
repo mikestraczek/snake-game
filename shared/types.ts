@@ -30,6 +30,7 @@ export type Player = {
   isHost: boolean
   score: number
   alive: boolean
+  isBot?: boolean
 }
 
 export type PlayerGameState = {
@@ -177,6 +178,8 @@ export type PlayerData = {
   socketId: string
   ready: boolean
   joinedAt: number
+  isBot?: boolean
+  botDifficulty?: BotDifficulty
 }
 
 export type GameData = {
@@ -227,3 +230,32 @@ export const PLAYER_COLORS = [
 ] as const
 
 export type PlayerColor = typeof PLAYER_COLORS[number]
+
+// Bot-spezifische Typen
+export type BotDifficulty = 'easy' | 'medium' | 'hard'
+
+export type BotData = {
+  id: string
+  name: string
+  color: string
+  roomId: string
+  difficulty: BotDifficulty
+  isReady: boolean
+  createdAt: number
+}
+
+export type AddBotEvent = {
+  difficulty: BotDifficulty
+}
+
+export type RemoveBotEvent = {
+  botId: string
+}
+
+export type BotAddedEvent = {
+  bot: Player
+}
+
+export type BotRemovedEvent = {
+  botId: string
+}

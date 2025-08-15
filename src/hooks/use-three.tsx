@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import type { GameState3D, BoardSize3D } from '../../shared/types'
@@ -24,6 +24,8 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
   const sceneRef = useRef<ThreeScene | null>(null)
   const [isInitialized, setIsInitialized] = useState(false)
   const animationFrameRef = useRef<number>()
+  const [followMode, setFollowMode] = useState(false)
+  const [debugInfo, setDebugInfo] = useState({ cameraPos: '', objectCount: 0 })
 
   // Szene initialisieren
   useEffect(() => {
@@ -37,14 +39,14 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     const scene = new THREE.Scene()
     scene.background = new THREE.Color(0x1a1a2e)
 
-    // Kamera erstellen
-    const camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 2000)
+    // Kamera erstellen - näher und besser positioniert
+    const camera = new THREE.PerspectiveCamera(60, width / height, 1, 1000)
     camera.position.set(
-      boardSize.width * 0.8,
-      boardSize.height * 1.2,
-      boardSize.depth * 0.8
+      boardSize.width * 0.6,
+      boardSize.height * 0.8,
+      boardSize.depth * 0.6
     )
-    camera.lookAt(boardSize.width / 2, 0, boardSize.depth / 2)
+    camera.lookAt(boardSize.width / 2, boardSize.height / 4, boardSize.depth / 2)
 
     // Renderer erstellen
     const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -54,31 +56,45 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     renderer.shadowMap.type = THREE.PCFSoftShadowMap
     container.appendChild(renderer.domElement)
 
-    // Orbit Controls
+    // Orbit Controls - optimiert für bessere Steuerung
     const controls = new OrbitControls(camera, renderer.domElement)
     controls.enableDamping = true
-    controls.dampingFactor = 0.05
-    controls.target.set(boardSize.width / 2, 0, boardSize.depth / 2)
-    controls.maxPolarAngle = Math.PI * 0.8
-    controls.minDistance = 200
-    controls.maxDistance = 1500
+    controls.dampingFactor = 0.08
+    controls.target.set(boardSize.width / 2, boardSize.height / 4, boardSize.depth / 2)
+    controls.maxPolarAngle = Math.PI * 0.75
+    controls.minDistance = 100
+    controls.maxDistance = 800
+    controls.enablePan = true
+    controls.panSpeed = 1.2
+    controls.rotateSpeed = 0.8
+    controls.zoomSpeed = 1.0
 
-    // Beleuchtung
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6)
+    // Verbesserte Beleuchtung für bessere Sichtbarkeit
+    const ambientLight = new THREE.AmbientLight(0x606060, 0.8)
     scene.add(ambientLight)
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8)
-    directionalLight.position.set(boardSize.width, boardSize.height * 2, boardSize.depth)
+    // Hauptlicht von oben
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2)
+    directionalLight.position.set(boardSize.width / 2, boardSize.height * 1.5, boardSize.depth / 2)
     directionalLight.castShadow = true
     directionalLight.shadow.mapSize.width = 2048
     directionalLight.shadow.mapSize.height = 2048
-    directionalLight.shadow.camera.near = 0.5
-    directionalLight.shadow.camera.far = 2000
-    directionalLight.shadow.camera.left = -boardSize.width
-    directionalLight.shadow.camera.right = boardSize.width
-    directionalLight.shadow.camera.top = boardSize.height
-    directionalLight.shadow.camera.bottom = -boardSize.height
+    directionalLight.shadow.camera.near = 1
+    directionalLight.shadow.camera.far = 1000
+    directionalLight.shadow.camera.left = -boardSize.width / 2
+    directionalLight.shadow.camera.right = boardSize.width / 2
+    directionalLight.shadow.camera.top = boardSize.depth / 2
+    directionalLight.shadow.camera.bottom = -boardSize.depth / 2
     scene.add(directionalLight)
+
+    // Zusätzliche Seitenlichter für bessere Ausleuchtung
+    const sideLight1 = new THREE.DirectionalLight(0x8888ff, 0.4)
+    sideLight1.position.set(-boardSize.width, boardSize.height, 0)
+    scene.add(sideLight1)
+
+    const sideLight2 = new THREE.DirectionalLight(0xff8888, 0.4)
+    sideLight2.position.set(boardSize.width * 2, boardSize.height, boardSize.depth)
+    scene.add(sideLight2)
 
     // Gruppen für Spielobjekte
     const boardGroup = new THREE.Group()
@@ -99,6 +115,8 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     }
 
     setIsInitialized(true)
+
+
 
     // Resize Handler
     const handleResize = () => {
@@ -134,27 +152,27 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     const { boardGroup } = sceneRef.current
     boardGroup.clear()
 
-    const tileCount = boardSize.width / boardSize.gridSize
-    const tileSize = boardSize.gridSize
 
-    // Boden
+
+    // Boden erstellen - sichtbarer und kontrastreicher
     const floorGeometry = new THREE.PlaneGeometry(boardSize.width, boardSize.depth)
     const floorMaterial = new THREE.MeshLambertMaterial({ 
-      color: 0x2a2a3e,
-      transparent: true,
-      opacity: 0.8
+      color: 0x1a1a2e,
+      transparent: false,
+      opacity: 1.0
     })
     const floor = new THREE.Mesh(floorGeometry, floorMaterial)
     floor.rotation.x = -Math.PI / 2
-    floor.position.set(boardSize.width / 2, -tileSize / 2, boardSize.depth / 2)
+    floor.position.set(boardSize.width / 2, 0, boardSize.depth / 2)
     floor.receiveShadow = true
     boardGroup.add(floor)
 
-    // Wände (transparent)
+    // Wände erstellen - sichtbarer mit Wireframe-Stil
     const wallMaterial = new THREE.MeshLambertMaterial({ 
-      color: 0x4a4a6e,
+      color: 0x6a6a8e,
       transparent: true,
-      opacity: 0.3,
+      opacity: 0.6,
+      wireframe: false,
       side: THREE.DoubleSide
     })
 
@@ -183,32 +201,15 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     rightWall.rotation.y = -Math.PI / 2
     boardGroup.add(rightWall)
 
-    // Gitter-Linien
-    const gridMaterial = new THREE.LineBasicMaterial({ 
-      color: 0x6a6a8e,
-      transparent: true,
-      opacity: 0.3
-    })
+    // Gitterlinien für bessere Orientierung - heller und sichtbarer
+    const gridHelper = new THREE.GridHelper(Math.max(boardSize.width, boardSize.depth), 20, 0x666666, 0x333333)
+    gridHelper.position.set(boardSize.width / 2, 0.1, boardSize.depth / 2)
+    boardGroup.add(gridHelper)
 
-    // Horizontale Linien
-    for (let i = 0; i <= tileCount; i++) {
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(i * tileSize, 0, 0),
-        new THREE.Vector3(i * tileSize, 0, boardSize.depth)
-      ])
-      const line = new THREE.Line(geometry, gridMaterial)
-      boardGroup.add(line)
-    }
-
-    // Vertikale Linien
-    for (let i = 0; i <= tileCount; i++) {
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, i * tileSize),
-        new THREE.Vector3(boardSize.width, 0, i * tileSize)
-      ])
-      const line = new THREE.Line(geometry, gridMaterial)
-      boardGroup.add(line)
-    }
+    // Zusätzliche Orientierungslinien an den Achsen
+    const axesHelper = new THREE.AxesHelper(Math.min(boardSize.width, boardSize.depth) / 4)
+    axesHelper.position.set(5, 1, 5)
+    boardGroup.add(axesHelper)
   }
 
   // Schlangen rendern
@@ -242,39 +243,39 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
 
       player.snake.forEach((segment, index) => {
         const isHead = index === 0
-        const radius = isHead ? boardSize.gridSize * 0.4 : boardSize.gridSize * 0.3
-        const height = boardSize.gridSize * 0.8
-
-        const geometry = new THREE.CylinderGeometry(radius, radius, height, 8)
-        const material = new THREE.MeshLambertMaterial({ 
-          color: new THREE.Color(color),
-          transparent: !isHead,
-          opacity: isHead ? 1 : 0.8
+        const size = isHead ? boardSize.gridSize * 1.2 : boardSize.gridSize * 0.9
+        const geometry = new THREE.BoxGeometry(size, size, size)
+        
+        const material = new THREE.MeshLambertMaterial({
+          color: isHead ? 0xffffff : new THREE.Color(color),
+          transparent: false,
+          emissive: isHead ? 0x222222 : 0x111111,
+          emissiveIntensity: 0.2
         })
         
-        const mesh = new THREE.Mesh(geometry, material)
-        mesh.position.set(
+        const cube = new THREE.Mesh(geometry, material)
+        cube.position.set(
           segment.x * boardSize.gridSize + boardSize.gridSize / 2,
-          height / 2,
+          size / 2,
           segment.z * boardSize.gridSize + boardSize.gridSize / 2
         )
-        mesh.castShadow = true
+        cube.castShadow = true
+        cube.receiveShadow = true
         
-        // Augen für Kopf
+        // Zusätzlicher Glow-Effekt für den Kopf
         if (isHead) {
-          const eyeGeometry = new THREE.SphereGeometry(2, 8, 8)
-          const eyeMaterial = new THREE.MeshLambertMaterial({ color: 0xffffff })
-          
-          const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
-          leftEye.position.set(-radius * 0.5, height * 0.3, radius * 0.7)
-          mesh.add(leftEye)
-          
-          const rightEye = new THREE.Mesh(eyeGeometry, eyeMaterial)
-          rightEye.position.set(radius * 0.5, height * 0.3, radius * 0.7)
-          mesh.add(rightEye)
+          const glowGeometry = new THREE.SphereGeometry(size * 0.6, 16, 16)
+          const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.3
+          })
+          const glow = new THREE.Mesh(glowGeometry, glowMaterial)
+          glow.position.copy(cube.position)
+          snakeGroup.add(glow)
         }
         
-        snakeGroup.add(mesh)
+        snakeGroup.add(cube)
       })
     })
   }
@@ -287,23 +288,65 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     foodGroup.clear()
 
     gameState.food.forEach(food => {
-      const geometry = new THREE.SphereGeometry(boardSize.gridSize * 0.3, 12, 12)
-      const material = new THREE.MeshLambertMaterial({ 
-        color: 0xff6b6b,
-        emissive: 0x441111
+      const geometry = new THREE.SphereGeometry(boardSize.gridSize * 0.6, 16, 16)
+      const material = new THREE.MeshLambertMaterial({
+        color: 0xff4444,
+        transparent: false,
+        emissive: 0x330000,
+        emissiveIntensity: 0.3
       })
       
-      const mesh = new THREE.Mesh(geometry, material)
-      mesh.position.set(
+      const sphere = new THREE.Mesh(geometry, material)
+      sphere.position.set(
         food.x * boardSize.gridSize + boardSize.gridSize / 2,
-        boardSize.gridSize * 0.3,
+        boardSize.gridSize * 0.6,
         food.z * boardSize.gridSize + boardSize.gridSize / 2
       )
-      mesh.castShadow = true
+      sphere.castShadow = true
+      sphere.receiveShadow = true
       
-      foodGroup.add(mesh)
+      // Pulsierender Effekt für bessere Sichtbarkeit
+      const time = Date.now() * 0.005
+      sphere.scale.setScalar(1 + Math.sin(time) * 0.1)
+      
+      // Glow-Effekt um das Futter
+      const glowGeometry = new THREE.SphereGeometry(boardSize.gridSize * 0.8, 16, 16)
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0xff4444,
+        transparent: true,
+        opacity: 0.2
+      })
+      const glow = new THREE.Mesh(glowGeometry, glowMaterial)
+      glow.position.copy(sphere.position)
+      foodGroup.add(glow)
+      
+      foodGroup.add(sphere)
     })
   }
+
+  // Follow-Modus für eigene Schlange
+  const toggleFollowMode = useCallback(() => {
+    setFollowMode(prev => !prev)
+  }, [])
+
+  const updateCameraFollow = useCallback((playerSnake: any) => {
+    if (!sceneRef.current || !followMode || !playerSnake?.snake?.[0]) return
+    
+    const { camera, controls } = sceneRef.current
+    const head = playerSnake.snake[0]
+    const targetPos = new THREE.Vector3(
+      head.x * boardSize.gridSize + boardSize.gridSize / 2,
+      head.y * boardSize.gridSize + boardSize.gridSize / 2 + 50,
+      head.z * boardSize.gridSize + boardSize.gridSize / 2 + 50
+    )
+    
+    camera.position.lerp(targetPos, 0.1)
+    controls.target.set(
+      head.x * boardSize.gridSize + boardSize.gridSize / 2,
+      head.y * boardSize.gridSize + boardSize.gridSize / 2,
+      head.z * boardSize.gridSize + boardSize.gridSize / 2
+    )
+  }, [followMode, boardSize])
 
   // Animation Loop
   const animate = () => {
@@ -312,6 +355,14 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
     const { renderer, scene, camera, controls } = sceneRef.current
     
     controls.update()
+    
+    // Debug-Informationen aktualisieren
+    const pos = camera.position
+    setDebugInfo({
+      cameraPos: `X: ${pos.x.toFixed(1)}, Y: ${pos.y.toFixed(1)}, Z: ${pos.z.toFixed(1)}`,
+      objectCount: scene.children.length
+    })
+    
     renderer.render(scene, camera)
     
     animationFrameRef.current = requestAnimationFrame(animate)
@@ -332,6 +383,10 @@ export function useThree({ containerRef, boardSize, gameState, players }: UseThr
 
   return {
     isInitialized,
-    scene: sceneRef.current
+    scene: sceneRef.current,
+    followMode,
+    toggleFollowMode,
+    updateCameraFollow,
+    debugInfo
   }
 }
